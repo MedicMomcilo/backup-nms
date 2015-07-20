@@ -1,0 +1,39 @@
+#!/bin/bash
+
+function nmsFail {
+	echo "[ Fail ]"
+	sleep 5
+	umount /mnt/smb
+	exit 1
+}
+
+echo -n "Mounting samba share... "
+mount /mnt/smb
+[ $? -eq 0 ] && echo "[  OK  ]" || nmsFail
+cd /mnt/smb/
+
+echo -n "Creating backup archive... "
+zip -q -r Archive.zip *
+[ $? -eq 0 ] && echo "[  OK  ]" || nmsFail
+
+echo -n "Uploading archive file to NMS backup FTP... "
+curl -s --ftp-create-dirs -T Archive.zip ftp://81.24.247.40:21021/nmsbackup/$(date +%d%m%Y)/ --user stnms:2yvhsLQm
+[ $? -eq 0 ] && echo "[  OK  ]" || nmsFail
+
+echo -n "Deleting backup file that is 14 days old... "
+curl --head -s -Q "DELE nmsbackup/$(date +%d%m%Y --date="14 days ago")/Archive.zip" ftp://81.24.247.40:21021 --user stnms:2yvhsLQm
+[ $? -eq 0 ] && echo "[  OK  ]" || echo "[ Fail ]"
+
+echo -n "Deleting backup folder that is 14 days old... "
+curl --head -s -Q "RMD nmsbackup/$(date +%d%m%Y --date="14 days ago")" ftp://81.24.247.40:21021 --user stnms:2yvhsLQm
+[ $? -eq 0 ] && echo "[  OK  ]" || echo "[ Fail ]"
+
+echo -n "Cleaning up Samba share... "
+rm Archive.zip
+[ $? -eq 0 ] && echo "[  OK  ]" || echo "[ Fail ]"
+sync
+cd
+
+echo -n "Unmounting Samba share... "
+umount /mnt/smb
+[ $? -eq 0 ] && echo "[  OK  ]" || echo "[ Fail ]"
